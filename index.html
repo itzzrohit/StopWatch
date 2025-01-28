@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Stopwatch & Chat</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+
+        h1 {
+            margin-top: 20px;
+            font-size: 2rem;
+        }
+
+        .stopwatch {
+            font-size: 2.5rem;
+            margin-top: 20px;
+            padding: 20px;
+            background-color: #333;
+            color: white;
+            border-radius: 10px;
+            width: 80%;
+            max-width: 400px;
+            margin: 20px auto;
+        }
+
+        .buttons {
+            margin-top: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 1rem;
+            background-color: #333;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #555;
+        }
+
+        .chat {
+            margin-top: 30px;
+            text-align: left;
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            overflow-y: auto;
+        }
+
+        .chat h2 {
+            font-size: 1.5rem;
+        }
+
+        .message {
+            padding: 8px;
+            margin: 5px 0;
+            background-color: #f1f1f1;
+            border-radius: 5px;
+        }
+
+        .input-container {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+            gap: 10px;
+        }
+
+        .input-container input {
+            width: 80%;
+            padding: 10px;
+            font-size: 1rem;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+
+        .input-container button {
+            padding: 10px 20px;
+            font-size: 1rem;
+            background-color: #333;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .input-container button:hover {
+            background-color: #555;
+        }
+
+        /* Responsive Styles */
+        @media (max-width: 768px) {
+            .stopwatch {
+                font-size: 2rem;
+                width: 90%;
+            }
+
+            .buttons {
+                flex-direction: column;
+            }
+
+            .chat {
+                width: 90%;
+            }
+
+            .input-container input {
+                width: 70%;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .stopwatch {
+                font-size: 1.8rem;
+            }
+
+            .buttons {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .chat {
+                width: 90%;
+                padding: 15px;
+            }
+
+            .input-container input {
+                width: 60%;
+            }
+
+            .input-container button {
+                padding: 8px 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Real-Time Stopwatch & Chat</h1>
+    
+    <!-- Stopwatch -->
+    <div class="stopwatch" id="stopwatch">
+        00:00
+    </div>
+    <div class="buttons">
+        <button id="startStopBtn">Start</button>
+        <button id="resetBtn">Reset</button>
+        <button id="resetMemoryBtn">Clear All Memory</button>
+    </div>
+
+    <!-- Chat -->
+    <div class="chat">
+        <h2>Chat</h2>
+        <div id="chatMessages"></div>
+        <div class="input-container">
+            <input type="text" id="chatInput" placeholder="Type a message..." />
+            <button id="sendChatBtn">Send</button>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+
+        const stopwatchElement = document.getElementById('stopwatch');
+        const startStopBtn = document.getElementById('startStopBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const resetMemoryBtn = document.getElementById('resetMemoryBtn');
+
+        const chatMessagesElement = document.getElementById('chatMessages');
+        const chatInputElement = document.getElementById('chatInput');
+        const sendChatBtn = document.getElementById('sendChatBtn');
+
+        let isRunning = false;
+        let stopwatchTime = 0;
+
+        // Format time as MM:SS
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            return `${minutes < 10 ? '0' : ''}${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
+        }
+
+        // Handle start/stop button
+        startStopBtn.addEventListener('click', () => {
+            socket.emit('toggleStopwatch');
+        });
+
+        // Handle reset button
+        resetBtn.addEventListener('click', () => {
+            socket.emit('resetStopwatch');
+        });
+
+        // Handle reset all memory button
+        resetMemoryBtn.addEventListener('click', () => {
+            socket.emit('resetMemory');
+        });
+
+        // Handle sending chat message
+        sendChatBtn.addEventListener('click', () => {
+            const message = chatInputElement.value.trim();
+            if (message) {
+                socket.emit('sendMessage', message);
+                chatInputElement.value = '';  // Clear the input field
+            }
+        });
+
+        // Listen for time updates from server
+        socket.on('updateTime', (data) => {
+            stopwatchTime = data.stopwatchTime;
+            isRunning = data.isRunning;
+            stopwatchElement.textContent = formatTime(stopwatchTime);
+            startStopBtn.textContent = isRunning ? 'Stop' : 'Start';
+        });
+
+        // Listen for new chat messages
+        socket.on('newMessage', (chatMessage) => {
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('message');
+            messageElement.textContent = `${chatMessage.user.slice(0, 5)}: ${chatMessage.message}`;
+            chatMessagesElement.appendChild(messageElement);
+            chatMessagesElement.scrollTop = chatMessagesElement.scrollHeight;  // Auto-scroll to bottom
+        });
+
+        // Listen for initial chat history when the user first connects
+        socket.on('chatHistory', (history) => {
+            chatMessagesElement.innerHTML = '';  // Clear the chat display
+            history.forEach(chatMessage => {
+                const messageElement = document.createElement('div');
+                messageElement.classList.add('message');
+                messageElement.textContent = `${chatMessage.user.slice(0, 5)}: ${chatMessage.message}`;
+                chatMessagesElement.appendChild(messageElement);
+            });
+        });
+    </script>
+</body>
+</html>
